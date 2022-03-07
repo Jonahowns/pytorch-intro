@@ -3,8 +3,11 @@ Small collection of pytorch Models for aptamer sequence data
 
 # What's Included
 2 Pytorch Lightning Scripts for training a Resnet and a Variational Auto Encoder
+
 links.txt -> Contains links to Pytorch and other python package Documentation/Tutorials
+
 MLmodels contains some universal functions used by both models, primarily it parses the data for each model
+
 If a model can't find the data, make sure the abs_path variable in get_rawdata() in MLmodels.py has a correct path
 
 # Prep
@@ -15,9 +18,12 @@ To do use the following command: conda env create --name myenv --file=exmachina3
 # Try to the Scripts Locally!
 Try to run the scripts!
 Both scripts can be called using:
-    conda activate myenv  # Activate env we created above, you can name it anything
-    python resnet.py   # Call Resnet Training 
-    python VAE.py    # Call VAE Training
+
+conda activate myenv  # Activate env we created above, you can name it anything 
+
+python resnet.py   # Call Resnet Training 
+
+python VAE.py    # Call VAE Training
 
 ## Both scripts are configured to run for 10 epochs
 ## The only datatype variables currently supported are HCLT, HCRT, and HCB20T
