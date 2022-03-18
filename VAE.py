@@ -109,6 +109,8 @@ class ATTENTION_VAE(pl.LightningModule):
             self.hidden_dims[1], self.out_image_channels, (1, 1), (1, 1), 0)
         self.decoder_atten5 = m.Self_Attention(self.hidden_dims[0])
 
+        self.save_hyperparameters()
+
     def encoder_block(self, dim1, dim2, kernel_size, stride, padding):
         return nn.Sequential(
             m.SpectralNorm(

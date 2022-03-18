@@ -64,6 +64,8 @@ class ResNetClassifier(pl.LightningModule):
         modules = list(self.resnet_model.children())[:-1]  # delete the last fc layer.
         self.resnet_model = nn.Sequential(*modules)
 
+        self.save_hyperparameters()
+
     def forward(self, X):
         # Takes our in
         x = self.resnet_model(X) # calls the forward function of the specified resnet model

@@ -448,8 +448,10 @@ class NAReader(Dataset):
 
         self.n_bases = 4
         self.max_length = max_length
-
-        self.train_labels = self.dataset.binary.to_numpy()
+        try:
+            self.train_labels = self.dataset.binary.to_numpy()
+        except AttributeError:
+            self.train_labels = None
         self.train_data = self.dataset.sequence.to_numpy()
 
     def __getitem__(self, index):
@@ -460,11 +462,14 @@ class NAReader(Dataset):
 
         seq = self.train_data[index]
         Seq = self.one_hot(seq)
-        affinity = self.train_labels[index]
-        return seq, Seq, affinity
+        if self.train_labels is None:
+            return seq, Seq
+        else:
+            affinity = self.train_labels[index]
+            return seq, Seq, affinity
 
     def one_hot(self, seq):
-        one_hot_vector = np.zeros((self.max_length, self.n_bases), dtype=np.float32)
+        one_hot_vector = np.zeros((self.max_length, self.n_bases), dtype=np.float64)
         for n, base in enumerate(seq):
             one_hot_vector[n][self.base_to_id[base]] = 1
         return one_hot_vector.reshape((1, 1, self.n_bases, self.max_length))
@@ -555,6 +560,11 @@ def my_collate(batch):
     one_hots = torch.from_numpy(np.vstack([item[1] for item in batch]))
     labels = torch.from_numpy(np.vstack([item[2] for item in batch])).squeeze(1)  # torch.LongTensor(target)
     return [seqs, one_hots, labels]
+
+def my_collate_unsupervised(batch):
+    seqs = np.vstack([item[0] for item in batch])
+    one_hots = torch.from_numpy(np.vstack([item[1] for item in batch]))
+    return [seqs, one_hots]
 
 def one_hot(seq, n_bases=4, max_length=20):
     base_to_id = {
