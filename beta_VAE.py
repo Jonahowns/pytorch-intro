@@ -6,9 +6,9 @@ from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.optim import SGD, AdamW, Adagrad  # Supported Optimizers
 from torch.utils.data import DataLoader
-from torchsummary import summary
 
 from multiprocessing import cpu_count
+from numpy.random import randint
 
 import MLmodels as m
 
@@ -413,7 +413,7 @@ class BetaVAE(LightningModule):
 
 
 if __name__ == '__main__':
-    config = {"datatype": "HCL",
+    config = {"datatype": "HCB20",
               "in_channels": 1,
               "latent_dim": 50,
               "beta": 5,  # # only used if loss_type == "H", beta = 1 is standard VAE
@@ -425,7 +425,7 @@ if __name__ == '__main__':
               "data_worker_num": 6,
               "optimizer": "AdamW",
               "lr": 1e-3,
-              "seed": 38,
+              "seed": randint(0, 100000, 1)[0],
               "batch_size": 5000,
               "replicas": 4,  # Number of samples for validation step
               "epochs": 2,
