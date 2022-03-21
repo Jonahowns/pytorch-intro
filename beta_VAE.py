@@ -35,6 +35,7 @@ class BetaVAE(LightningModule):
         self.lr = config['lr']
         optimizer = config["optimizer"]
         self.seed =config['seed']
+        self.replicas = config['replicas']
         self.batch_size = config["batch_size"]
         self.attention_layers = config["attention_layers"]  # Something we might add in the future
 
@@ -82,42 +83,95 @@ class BetaVAE(LightningModule):
         # Pytorch Basic Options
         torch.manual_seed(self.seed)  # For reproducibility
         torch.set_default_dtype(torch.float64)  # Double Precision
+        # goes from tensor (B, 1, 4, 20) to (B, 512, 1, 4)
+        self.dna_no_gap_convolutions = [{"kernel": (3, 5), "stride": (1, 1), "padding": (1, 1)},
+                                        {"kernel": (3, 5), "stride": (1, 1), "padding": (1, 1)},
+                                        {"kernel": (3, 5), "stride": (1, 1), "padding": (1, 1)},
+                                        {"kernel": (3, 6), "stride": (1, 1), "padding": (0, 0)},
+                                        {"kernel": (2, 6), "stride": (1, 1), "padding": (0, 0)}
+                                        ]
 
+        self.dna_gap_convolutions = [{"kernel": (4, 5), "stride": (1, 1), "padding": 1},
+                                     {"kernel": (3, 5), "stride": (1, 1), "padding": 1},
+                                     {"kernel": (3, 5), "stride": (1, 1), "padding": 1},
+                                     {"kernel": (3, 6), "stride": (1, 1), "padding": (0, 0)},
+                                     {"kernel": (2, 6), "stride": (1, 1), "padding": (0, 0)}
+                                     ]
+
+        # Set which parameters
+        c_params = self.dna_no_gap_convolutions
 
         # build encoder
-        self.block_num = len(hidden_dims) - 1
-        self.encoder_input = nn.Conv2d(1, out_channels=hidden_dims[0], kernel_size=3, padding=1)
-        self.encoder = []
-        for i in range(self.block_num):
-            self.encoder.append(self.build_encoder_block(hidden_dims[i], hidden_dims[i+1], kernel=3, padding=1, stride=2))
-            if self.attention_layers:
-                self.encoder.append(m.Self_Attention(hidden_dims[i+1]))
+        self.block_num = len(hidden_dims)
+        # first_conv = {"kernel": (3, 3), "stride": (1, 1), "padding": (1, 1)}
+        # self.encoder_input = nn.Conv2d(1, out_channels=hidden_dims[0],
+        #                                kernel_size=(3, 5),
+        #                                stride=(1, 1),
+        #                                padding=1)
+        self.encoder_input = self.build_encoder_block(1, hidden_dims[0],
+                                                     kernel=c_params[0]["kernel"],
+                                                     padding=c_params[0]["padding"],
+                                                     stride=c_params[0]["stride"])
+        self.encoder1 = self.build_encoder_block(hidden_dims[0], hidden_dims[1],
+                                                     kernel=c_params[1]["kernel"],
+                                                     padding=c_params[1]["padding"],
+                                                     stride=c_params[1]["stride"])
+        self.encoder2 = self.build_encoder_block(hidden_dims[1], hidden_dims[2],
+                                                 kernel=c_params[2]["kernel"],
+                                                 padding=c_params[2]["padding"],
+                                                 stride=c_params[2]["stride"])
+        self.encoder3 = self.build_encoder_block(hidden_dims[2], hidden_dims[3],
+                                                 kernel=c_params[3]["kernel"],
+                                                 padding=c_params[3]["padding"],
+                                                 stride=c_params[3]["stride"])
+        self.encoder4 = self.build_encoder_block(hidden_dims[3], hidden_dims[4],
+                                                 kernel=c_params[4]["kernel"],
+                                                 padding=c_params[4]["padding"],
+                                                 stride=c_params[4]["stride"])
+
+        if self.attention_layers:
+            self.encoder_attn0 = m.Self_Attention(hidden_dims[0])
+            self.encoder_attn1 = m.Self_Attention(hidden_dims[1])
+            self.encoder_attn2 = m.Self_Attention(hidden_dims[2])
+            self.encoder_attn3 = m.Self_Attention(hidden_dims[3])
+
 
         reversed_hidden_dims = hidden_dims[::-1]
+        reversed_c_params = c_params[::-1]
         # build decoder
         self.decoder_input = nn.Linear(self.latent_dim, reversed_hidden_dims[0] * 4)
-        self.decoder = []
-        for i in range(self.block_num):
-            self.encoder.append(self.build_encoder_block(reversed_hidden_dims[i], reversed_hidden_dims[i + 1], kernel=3, padding=1, stride=2))
-            if self.attention_layers:
-                self.encoder.append(m.Self_Attention(hidden_dims[i + 1]))
 
-        self.final_layer = nn.Sequential(
-            nn.ConvTranspose2d(reversed_hidden_dims[0],
-                               reversed_hidden_dims[0],
-                               kernel_size=3,
-                               stride=2,
-                               padding=1,
-                               output_padding=1),
-            nn.BatchNorm2d(reversed_hidden_dims[0]),
-            nn.LeakyReLU(),
-            nn.Conv2d(reversed_hidden_dims[0], out_channels=3,
-                      kernel_size=3, padding=1),
-            nn.Tanh())
+        self.decoder1 = self.build_decoder_block(reversed_hidden_dims[0], reversed_hidden_dims[1],
+                                                     kernel=reversed_c_params[0]["kernel"],
+                                                     padding=reversed_c_params[0]["padding"],
+                                                     stride=reversed_c_params[0]["stride"])
+        self.decoder2 = self.build_decoder_block(reversed_hidden_dims[1], reversed_hidden_dims[2],
+                                                     kernel=reversed_c_params[1]["kernel"],
+                                                     padding=reversed_c_params[1]["padding"],
+                                                     stride=reversed_c_params[1]["stride"])
+        self.decoder3 = self.build_decoder_block(reversed_hidden_dims[2], reversed_hidden_dims[3],
+                                                 kernel=reversed_c_params[2]["kernel"],
+                                                 padding=reversed_c_params[2]["padding"],
+                                                 stride=reversed_c_params[2]["stride"])
+        self.decoder4 = self.build_decoder_block(reversed_hidden_dims[3], reversed_hidden_dims[4],
+                                                 kernel=reversed_c_params[3]["kernel"],
+                                                 padding=reversed_c_params[3]["padding"],
+                                                 stride=reversed_c_params[3]["stride"])
+        self.decoder5 = self.build_decoder_block(reversed_hidden_dims[4], 1,
+                                                 kernel=reversed_c_params[4]["kernel"],
+                                                 padding=reversed_c_params[4]["padding"],
+                                                 stride=reversed_c_params[4]["stride"])
+
+        if self.attention_layers:
+            self.decoder_attn0 = m.Self_Attention(reversed_hidden_dims[0])
+            self.decoder_attn1 = m.Self_Attention(reversed_hidden_dims[1])
+            self.decoder_attn2 = m.Self_Attention(reversed_hidden_dims[2])
+            self.decoder_attn3 = m.Self_Attention(reversed_hidden_dims[3])
+            self.decoder_attn4 = m.Self_Attention(reversed_hidden_dims[4])
 
 
-        self.fc_mu = nn.Linear(hidden_dims[-1] * 4, self.latent_dim)
-        self.fc_var = nn.Linear(hidden_dims[-1] * 4, self.latent_dim)
+        self.fc_mu = nn.Linear(hidden_dims[-1] * 4, self.latent_dim, device=self.device)
+        self.fc_var = nn.Linear(hidden_dims[-1] * 4, self.latent_dim, device=self.device)
 
         self.save_hyperparameters()
 
@@ -125,19 +179,19 @@ class BetaVAE(LightningModule):
     def build_encoder_block(self, in_dims, out_dims, kernel=3, stride=2, padding=1):
         return nn.Sequential(
             nn.Conv2d(in_dims, out_channels=out_dims,
-                      kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(out_dims),
+                      kernel_size=kernel, stride=stride, padding=padding, device=self.device),
+            nn.BatchNorm2d(out_dims, device=self.device),
             nn.LeakyReLU())
 
-    def build_decoder_block(self, in_dims, out_dims, kernel=3, stride=2, padding=1, output_padding=1):
+    def build_decoder_block(self, in_dims, out_dims, kernel=3, stride=2, padding=1):
         return nn.Sequential(
             nn.ConvTranspose2d(in_dims,
                                out_dims,
                                kernel_size=kernel,
                                stride=stride,
                                padding=padding,
-                               output_padding=1),
-            nn.BatchNorm2d(out_dims),
+                               device=self.device),
+            nn.BatchNorm2d(out_dims, device=self.device),
             nn.LeakyReLU())
 
     def encode(self, input):
@@ -147,46 +201,60 @@ class BetaVAE(LightningModule):
         :param input: (Tensor) Input tensor to encoder [N x C x H x W]
         :return: (Tensor) List of latent codes
         """
+        # print("input",  input.shape)
         x = self.encoder_input(input)
         if self.attention_layers:
-            attn_maps = []
-            for i in range(self.block_num):
-                indx = 2*i
-                x = self.encoder[indx](x)
-                x, attn_map = self.encoder[indx+1](x)
-                attn_maps.append(attn_map)
+            x, attn0 = self.encoder_attn0(x)
+            x = self.encoder1(x)
+            x, attn1 = self.encoder_attn1(x)
+            x = self.encoder2(x)
+            x, attn2 = self.encoder_attn2(x)
+            x = self.encoder3(x)
+            x, attn3 = self.encoder_attn3(x)
+            x = self.encoder4(x)
+            attn_maps = [attn0, attn1, attn2, attn3]
         else:
             attn_maps = []
-            for i in range(self.block_num):
-                x = self.encoder[i](x)
+            x = self.encoder1(x)
+            x = self.encoder2(x)
+            x = self.encoder3(x)
+            x = self.encoder4(x)
 
         result = torch.flatten(x, start_dim=1)
-
+        # print("result", result.shape)
         # Split the result into mu and var components
         # of the latent Gaussian distribution
         mu = self.fc_mu(result)
         log_var = self.fc_var(result)
 
-        return [mu, log_var, attn_maps]
+        return mu, log_var, attn_maps
 
     def decode(self, z):
         z = self.decoder_input(z)
-        z = z.view(-1, 512, 2, 2)
+        z = z.view(-1, 512, 1, 4)
 
         if self.attention_layers:
-            attn_maps = []
-            for i in range(self.block_num):
-                indx = 2 * i
-                z = self.decoder[indx](z)
-                z, attn_map = self.decoder[indx + 1](z)
-                attn_maps.append(attn_map)
+            z, attn0 = self.decoder_attn0(z)
+            z = self.decoder1(z)
+            z, attn1 = self.decoder_attn1(z)
+            z = self.decoder2(z)
+            z, attn2 = self.decoder_attn2(z)
+            z = self.decoder3(z)
+            z, attn3 = self.encoder_attn3(z)
+            z = self.decoder4(z)
+            z, attn4 = self.decoder_attn4(z)
+            z = self.decoder(5)
+            attn_maps = [attn0, attn1, attn2, attn3, attn4]
         else:
             attn_maps = []
-            for i in range(self.block_num):
-                z = self.decoder[i](z)
+            z = self.decoder1(z)
+            z = self.decoder2(z)
+            z = self.decoder3(z)
+            z = self.decoder4(z)
+            z = self.decoder5(z)
 
-        result = self.final_layer(z)
-        return result, attn_maps
+        # result = self.final_layer(z)
+        return z, attn_maps
 
     def reparameterize(self, mu, logvar):
         """
@@ -286,7 +354,7 @@ class BetaVAE(LightningModule):
         recon_acc = (x == xpp).float().mean().item()
 
         loss_dict = self.loss_function(recon_x, x, mu, log_var)
-        loss_dict["recon_acc"] = recon_acc.detach()
+        loss_dict["recon_acc"] = recon_acc
 
         self.log("ptl/train_loss", loss_dict["loss"], on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log("ptl/train_recon_acc", recon_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
@@ -298,8 +366,8 @@ class BetaVAE(LightningModule):
         avg_loss = torch.stack([x['loss'].detach() for x in outputs]).mean()
         avg_kld_loss = torch.stack([x["kld_loss"] for x in outputs]).mean()
         avg_recon_loss = torch.stack([x["recon_loss"] for x in outputs]).mean()
-        avg_recon_acc = torch.stack([x["recon_acc"] for x in outputs]).mean()
-
+        recon_accs = [x["recon_acc"] for x in outputs]
+        avg_recon_acc = sum(recon_accs) / len(recon_accs)
         # For Tensorboard Logger
         self.logger.experiment.add_scalars("All Scalars", {"Train Loss": avg_loss,
                                                            "Train KLD_Loss": avg_kld_loss,
@@ -323,7 +391,7 @@ class BetaVAE(LightningModule):
         recon_acc = (x == xpp).float().mean().item()
 
         loss_dict = self.loss_function(recon_x, x, mu, log_var)
-        loss_dict["recon_acc"] = recon_acc.detach()
+        loss_dict["recon_acc"] = recon_acc
 
         self.log("ptl/val_loss", loss_dict["loss"], on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log("ptl/val_recon_acc", recon_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
@@ -333,7 +401,8 @@ class BetaVAE(LightningModule):
         avg_loss = torch.stack([x['loss'].detach() for x in outputs]).mean()
         avg_kld_loss = torch.stack([x["kld_loss"] for x in outputs]).mean()
         avg_recon_loss = torch.stack([x["recon_loss"] for x in outputs]).mean()
-        avg_recon_acc = torch.stack([x["recon_acc"] for x in outputs]).mean()
+        recon_accs = [x["recon_acc"] for x in outputs]
+        avg_recon_acc = sum(recon_accs) / len(recon_accs)
 
         # For Tensorboard Logger
         self.logger.experiment.add_scalars("All Scalars", {"Validation Loss": avg_loss,
@@ -347,27 +416,36 @@ if __name__ == '__main__':
     config = {"datatype": "HCL",
               "in_channels": 1,
               "latent_dim": 50,
-              "beta": 1,  # # only used if loss_type == "B", B = 1 is standard VAE
-              "gamma": 1,  # only used if loss_type == "H"
-              "hidden_dims": [32, 64, 128, 256, 512],
-              "max_capacity": 25,  # only used if loss_type == "H"
-              "capacity_max_iter": 1e5,  # only used if loss_type == "H"
-              "loss_type": "B",  # B or H
+              "beta": 5,  # # only used if loss_type == "H", beta = 1 is standard VAE
+              "gamma": 1,  # only used if loss_type == "B"
+              "hidden_dims": [8, 16, 32, 64, 512],
+              "max_capacity": 25,  # only used if loss_type == "B"
+              "capacity_max_iter": 1e5,  # only used if loss_type == "B"
+              "loss_type": "H",  # B or H
               "data_worker_num": 6,
               "optimizer": "AdamW",
               "lr": 1e-3,
               "seed": 38,
               "batch_size": 5000,
-              "attention_layers": False}
+              "replicas": 4,  # Number of samples for validation step
+              "epochs": 2,
+              "attention_layers": False, # This doesn't quite work yet
+              }
 
-    beta_vae = BetaVAE(config, debug=True)
-    # summary(beta_vae, (1, 4, 20), 5000)
+    beta_vae = BetaVAE(config, debug=False)
 
-    beta_vae.prepare_data()
-    td = beta_vae.train_dataloader()
-    for i, b in enumerate(td):
-        if i > 0:
-            break
-        else:
-            seq, x = b
-            beta_vae.encode(x)
+    logger = TensorBoardLogger('tb_logs', name='BVAE_trial')  # logging using Tensorboard
+    plt = Trainer(max_epochs=config['epochs'], logger=logger, gpus=1)  # switching between cpu and gpu is as easy as changing the number on the gpus argument
+    plt.fit(beta_vae)  # Starts Training Process
+
+    # beta_vae.prepare_data()
+    # td = beta_vae.train_dataloader()
+    # for i, b in enumerate(td):
+    #     if i > 0:
+    #         break
+    #     else:
+    #         seq, x = b
+    #         mu, log_var, enc_attn_maps = beta_vae.encode(x)
+    #         z = beta_vae.reparameterize(mu, log_var)
+    #         recon_x, dec_attn_maps = beta_vae.decode(z)
+
