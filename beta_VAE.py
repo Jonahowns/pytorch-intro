@@ -157,7 +157,7 @@ class BetaVAE(LightningModule):
                                                  kernel=reversed_c_params[3]["kernel"],
                                                  padding=reversed_c_params[3]["padding"],
                                                  stride=reversed_c_params[3]["stride"])
-        self.decoder5 = self.build_decoder_block(reversed_hidden_dims[4], 1,
+        self.decoder5 = self.build_decoder_block_sigmoid(reversed_hidden_dims[4], 1,
                                                  kernel=reversed_c_params[4]["kernel"],
                                                  padding=reversed_c_params[4]["padding"],
                                                  stride=reversed_c_params[4]["stride"])
@@ -193,6 +193,17 @@ class BetaVAE(LightningModule):
                                device=self.device),
             nn.BatchNorm2d(out_dims, device=self.device),
             nn.LeakyReLU())
+
+    def build_decoder_block_sigmoid(self, in_dims, out_dims, kernel=3, stride=2, padding=1):
+        return nn.Sequential(
+            nn.ConvTranspose2d(in_dims,
+                               out_dims,
+                               kernel_size=kernel,
+                               stride=stride,
+                               padding=padding,
+                               device=self.device),
+            nn.BatchNorm2d(out_dims, device=self.device),
+            nn.Sigmoid())
 
     def encode(self, input):
         """
@@ -428,7 +439,7 @@ if __name__ == '__main__':
               "seed": randint(0, 100000, 1)[0],
               "batch_size": 5000,
               "replicas": 4,  # Number of samples for validation step
-              "epochs": 2,
+              "epochs": 200,
               "attention_layers": False, # This doesn't quite work yet
               }
 
