@@ -40,6 +40,30 @@ from torch.nn import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 from tqdm import tqdm as tqdm_base
 
+# Fasta File Reader, with affinities
+def fasta_read(fastafile, seq_read_counts=False, drop_duplicates=False):
+    o = open(fastafile)
+    titles = []
+    seqs = []
+    for line in o:
+        if line.startswith('>'):
+            if seq_read_counts:
+                titles.append(float(line.rstrip().split('-')[1]))
+        else:
+            seqs.append(line.rstrip())
+    o.close()
+    if drop_duplicates:
+        # seqs = list(set(seqs))
+        all_seqs = pd.DataFrame(seqs).drop_duplicates()
+        seqs = all_seqs.values.tolist()
+        seqs = [j for i in seqs for j in i]
+
+    if seq_read_counts:
+        return seqs, titles
+    else:
+        return seqs
+
+
 
 # gets data from data directory
 def get_rawdata(type, countcutoff, n_copies, round=8, outputnum=2, seed=69):
