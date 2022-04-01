@@ -85,8 +85,8 @@ def get_rawdata(type, countcutoff, n_copies, round=8, outputnum=2, seed=69):
     # abs_path = "/scratch/jprocyk/ML/ML_for_aptamers/data/"
 
     #local
-    # abs_path = "/home/jonah/PycharmProjects/ML_for_aptamers/data/"
-    abs_path = "./data/"  # local mac
+    abs_path = "/home/jonah/PycharmProjects/pytorch-intro/data/"
+    # abs_path = "./data/"  # local mac
     # type is arbitrary designator to load the data as we feel necessary
     if 'N' in type:  # normal unadjusted data
         tmp = pd.read_csv(abs_path+"2HX_" + str(round) + "th_new.csv", sep=";")
